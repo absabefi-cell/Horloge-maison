@@ -3,18 +3,17 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Horloge + cloche (demi & heures)</title>
+<title>Horloge + cloche (demi & heures) – robuste</title>
 <style>
   :root { --bg:#0a0f1a; --fg:#eaf2fb; --yellow:#ffeb3b; --ring:#3a6cc9; }
   *{ box-sizing:border-box }
-  html,body{ height:100%; margin:0; background:var(--bg); color:var(--fg);
-             font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif; }
+  html,body{ height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif; }
 
   header{ padding:8px 10px; display:flex; flex-wrap:wrap; gap:10px; justify-content:center; align-items:center }
   .btn{ background:#16294a; border:1px solid var(--ring); color:var(--fg); padding:8px 12px; border-radius:12px; font-weight:700 }
   .btn:disabled{ opacity:.6 }
   label{ font-size:.95rem; opacity:.9 }
-  input,select{ background:#0d1a33; border:1px solid var(--ring); color:var(--fg); border-radius:10px; padding:6px 8px }
+  input{ background:#0d1a33; border:1px solid var(--ring); color:var(--fg); border-radius:10px; padding:6px 8px }
   input[type="number"]{ width:92px }
   input[type="range"]{ width:140px }
 
@@ -23,11 +22,9 @@
   svg{ display:block; user-select:none; -webkit-user-select:none; touch-action:manipulation }
 
   .card{ width:min(940px,96vw); border:1px solid var(--ring); border-radius:14px; padding:10px; background:#0f1622; margin:8px auto 0 }
-  .mono{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:.95rem }
+  .mono{ font-family:ui-monospace, Menlo, Consolas, monospace; font-size:.95rem }
   .ok{ color:#9be28c } .warn{ color:#ff9898 }
-
-  /* on garde la 3e ligne (tests) masquée */
-  .row.tests{ display:none !important; }
+  .dim{ opacity:.8 }
 </style>
 </head>
 <body>
@@ -36,10 +33,10 @@
   <button id="chooseBtn" class="btn">🔔 Choisir cloche.mp3</button>
   <input id="file" type="file" accept="audio/*" hidden />
 
-  <label for="first">First(s)</label><input id="first" type="number" step="0.01" min="0" value="4.5">
-  <label for="step">Step(s)</label><input id="step"  type="number" step="0.001" min="0" value="1.47">
-  <label for="useful">Utile(s)</label><input id="useful" type="number" step="0.01" min="0" placeholder="(auto)">
-  <label for="offset">Offset(ms)</label><input id="offset" type="number" step="10" min="0" value="0">
+  <label for="first">First(s)</label><input id="first" type="text" value="4,5">
+  <label for="step">Step(s)</label><input id="step"  type="text" value="1,47">
+  <label for="useful">Utile(s)</label><input id="useful" type="text" placeholder="(auto)">
+  <label for="offset">Offset(ms)</label><input id="offset" type="text" value="0">
   <label for="bellVol">Vol cloche</label><input id="bellVol" type="range" min="0" max="1" step="0.01" value="1">
 
   <button id="fs" class="btn">⛶ Plein écran</button>
@@ -50,9 +47,7 @@
   <svg class="clock" viewBox="0 0 1000 1000" aria-label="Horloge">
     <defs>
       <radialGradient id="gDial" cx="50%" cy="42%" r="70%">
-        <stop offset="0%"  stop-color="#2860ba"/>
-        <stop offset="70%" stop-color="#123a85"/>
-        <stop offset="100%" stop-color="#0a1730"/>
+        <stop offset="0%"  stop-color="#2860ba"/><stop offset="70%" stop-color="#123a85"/><stop offset="100%" stop-color="#0a1730"/>
       </radialGradient>
       <filter id="glowHands" x="-50%" y="-50%" width="200%" height="200%">
         <feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
@@ -78,134 +73,83 @@
 
 <div class="card mono">
   <div id="status">Cloche GitHub : chargement…</div>
-  <div id="summary">—</div>
+  <div id="summary" class="dim">—</div>
+  <div id="next" class="dim">Prochaine sonnerie : calcul…</div>
 </div>
 
 <script>
-/* ============== Dessin horloge ============== */
-(function(){ const g=document.getElementById('minTicks');
-  for(let i=0;i<60;i++){ const u=document.createElementNS('http://www.w3.org/2000/svg','use');
-    u.setAttributeNS('http://www.w3.org/1999/xlink','href','#mTick');
-    u.setAttribute('transform',`rotate(${i*6} 500 500)`); g.appendChild(u); }})();
-(function(){ const g=document.getElementById('numbers'); const cx=500, cy=500, r=430;
-  for(let i=1;i<=12;i++){ const a=(i-3)*30*Math.PI/180, x=cx+r*Math.cos(a), y=cy+r*Math.sin(a);
-    const t=document.createElementNS('http://www.w3.org/2000/svg','text'); t.setAttribute('x',x.toFixed(1));
-    t.setAttribute('y',y.toFixed(1)); t.textContent=i; g.appendChild(t);} })();
-const hH=document.getElementById('hHour'), hM=document.getElementById('hMinute'), hS=document.getElementById('hSecond');
-(function loop(){ const now=new Date(); const s=now.getSeconds()+now.getMilliseconds()/1000;
-  const m=now.getMinutes()+s/60; const h=(now.getHours()%12)+m/60;
-  hS.setAttribute('transform',`rotate(${s*6} 500 500)`); hM.setAttribute('transform',`rotate(${m*6} 500 500)`);
-  hH.setAttribute('transform',`rotate(${h*30} 500 500)`); requestAnimationFrame(loop); })();
+/* ======= Horloge : graduations + chiffres ======= */
+(function(){const g=document.getElementById('minTicks');for(let i=0;i<60;i++){const u=document.createElementNS('http://www.w3.org/2000/svg','use');u.setAttributeNS('http://www.w3.org/1999/xlink','href','#mTick');u.setAttribute('transform',`rotate(${i*6} 500 500)`);g.appendChild(u);}})();
+(function(){const g=document.getElementById('numbers');const cx=500,cy=500,r=430;for(let i=1;i<=12;i++){const a=(i-3)*30*Math.PI/180,x=cx+r*Math.cos(a),y=cy+r*Math.sin(a);const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('x',x.toFixed(1));t.setAttribute('y',y.toFixed(1));t.textContent=i;g.appendChild(t);}})();
+const hH=document.getElementById('hHour'),hM=document.getElementById('hMinute'),hS=document.getElementById('hSecond');
+(function loop(){const now=new Date();const s=now.getSeconds()+now.getMilliseconds()/1000;const m=now.getMinutes()+s/60;const h=(now.getHours()%12)+m/60;hS.setAttribute('transform',`rotate(${s*6} 500 500)`);hM.setAttribute('transform',`rotate(${m*6} 500 500)`);hH.setAttribute('transform',`rotate(${h*30} 500 500)`);requestAnimationFrame(loop);})();
 
-/* ============== Audio (GitHub par défaut) ============== */
-const DEFAULT_BELL_URL = "https://raw.githubusercontent.com/absabefi-cell/Horloge-maison/main/Cloche.mp3";
+/* ===================== Audio (GitHub par défaut) ===================== */
+const DEFAULT_BELL_URL="https://raw.githubusercontent.com/absabefi-cell/Horloge-maison/main/Cloche.mp3";
 
-let audioCtx=null, bellBuffer=null, bellGain=null, enabled=false;
+let audioCtx=null,bellBuffer=null,bellGain=null,enabled=false;
 let cachedGithubArrayBuffer=null;
-let lastHour=-1, lastHalfKey="";
+let lastMinuteKey=""; // anti-doublon par minute
 
-const els = {
-  soundBtn:  document.getElementById('soundBtn'),
-  chooseBtn: document.getElementById('chooseBtn'),
-  file:      document.getElementById('file'),
-  first:     document.getElementById('first'),
-  step:      document.getElementById('step'),
-  useful:    document.getElementById('useful'),
-  offset:    document.getElementById('offset'),
-  bellVol:   document.getElementById('bellVol'),
-  status:    document.getElementById('status'),
-  summary:   document.getElementById('summary'),
-};
+const els={soundBtn:soundBtn,chooseBtn:chooseBtn,file:file,first:first,step:step,useful:useful,offset:offset,bellVol:bellVol,status:status,summary:summary,next:next};
 
-/* -- sauvegarde réglages -- */
-function saveSettings(){
-  localStorage.setItem("bell:first", els.first.value);
-  localStorage.setItem("bell:step",  els.step.value);
-  localStorage.setItem("bell:useful",els.useful.value);
-  localStorage.setItem("bell:offset",els.offset.value);
-  localStorage.setItem("bell:vol",   els.bellVol.value);
-  localStorage.setItem("bell:url",   DEFAULT_BELL_URL);
+/* --- helpers --- */
+const fmt=s=>Math.round(s*100)/100+"s";
+function num(x){ // supporte 4,5 et 1.47
+  const n=parseFloat(String(x).replace(',','.'));
+  return (isNaN(n)||n<0)?0:n;
 }
-function loadSettings(){
-  els.first.value  = localStorage.getItem("bell:first") ?? els.first.value;
-  els.step.value   = localStorage.getItem("bell:step")  ?? els.step.value;
-  els.useful.value = localStorage.getItem("bell:useful")?? els.useful.value;
-  els.offset.value = localStorage.getItem("bell:offset")?? els.offset.value;
-  els.bellVol.value= localStorage.getItem("bell:vol")   ?? els.bellVol.value;
-}
-[els.first,els.step,els.useful,els.offset,els.bellVol].forEach(e=>e.addEventListener('input',()=>{refreshSummary(); saveSettings();}));
-loadSettings();
 
-/* -- préchargement GitHub -- */
-(async function preloadGithub(){
-  try{
-    const url = localStorage.getItem("bell:url") || DEFAULT_BELL_URL;
-    const res = await fetch(url, {mode:"cors"});
-    if(!res.ok) throw new Error("HTTP "+res.status);
-    cachedGithubArrayBuffer = await res.arrayBuffer();
-    els.status.textContent = "Cloche GitHub préchargée ✅ (touche l’écran pour autoriser le son)";
-  }catch(e){
-    els.status.textContent = "⚠️ Échec chargement GitHub (vérifie l’URL RAW).";
-    console.error(e);
-  }
+/* --- persistence --- */
+function save(){localStorage.setItem("bell:first",els.first.value);localStorage.setItem("bell:step",els.step.value);localStorage.setItem("bell:useful",els.useful.value);localStorage.setItem("bell:offset",els.offset.value);localStorage.setItem("bell:vol",els.bellVol.value);localStorage.setItem("bell:url",DEFAULT_BELL_URL);}
+function load(){if(localStorage.getItem("bell:first"))els.first.value=localStorage.getItem("bell:first");if(localStorage.getItem("bell:step"))els.step.value=localStorage.getItem("bell:step");if(localStorage.getItem("bell:useful"))els.useful.value=localStorage.getItem("bell:useful");if(localStorage.getItem("bell:offset"))els.offset.value=localStorage.getItem("bell:offset");if(localStorage.getItem("bell:vol"))els.bellVol.value=localStorage.getItem("bell:vol");}
+[els.first,els.step,els.useful,els.offset,els.bellVol].forEach(e=>e.addEventListener('input',()=>{refreshSummary();save();}));
+load();
+
+/* --- préchargement GitHub --- */
+(async function preload(){
+  try{const url=localStorage.getItem("bell:url")||DEFAULT_BELL_URL;const res=await fetch(url,{mode:"cors"});if(!res.ok)throw new Error("HTTP "+res.status);cachedGithubArrayBuffer=await res.arrayBuffer();els.status.textContent="Cloche GitHub préchargée ✅ (touche l’écran pour autoriser le son)";}
+  catch(e){els.status.textContent="⚠️ Échec chargement GitHub (vérifie l’URL RAW).";console.error(e);}
 })();
 
-function ensureAudio(){
-  if(!audioCtx){
-    audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-    bellGain=audioCtx.createGain();
-    bellGain.gain.value=parseFloat(els.bellVol.value);
-    bellGain.connect(audioCtx.destination);
-  }
-}
-async function resumeAudio(){
-  ensureAudio();
-  if(audioCtx.state==='suspended') await audioCtx.resume();
-  enabled=true; els.soundBtn.disabled=true; saveSettings();
-  if(cachedGithubArrayBuffer && !bellBuffer){
-    try{ bellBuffer = await audioCtx.decodeAudioData(cachedGithubArrayBuffer.slice(0));
-         els.status.textContent = "Cloche GitHub active ✅"; refreshSummary(); }
-    catch(e){ console.error(e); }
-  }
-}
-els.bellVol.oninput=()=>{ if(bellGain) bellGain.gain.value=parseFloat(els.bellVol.value); };
-els.soundBtn.onclick=resumeAudio;
-els.chooseBtn.onclick=()=>els.file.click();
-els.file.onchange=async()=>{
-  const f=els.file.files?.[0]; if(!f) return; await resumeAudio();
-  try{ const arr=await f.arrayBuffer(); bellBuffer=await audioCtx.decodeAudioData(arr);
-       els.status.textContent=`Cloche chargée ✅ (${f.name}, ${fmt(bellBuffer.duration)})`; refreshSummary(); saveSettings(); }
-  catch(e){ console.error(e); bellBuffer=null; els.status.textContent='⚠️ Erreur de décodage du MP3.'; refreshSummary(); }
-};
+/* --- audio ctx --- */
+function ensureAudio(){if(!audioCtx){audioCtx=new(window.AudioContext||window.webkitAudioContext)();bellGain=audioCtx.createGain();bellGain.gain.value=parseFloat(els.bellVol.value);bellGain.connect(audioCtx.destination);}}
+async function resumeAudio(){ensureAudio();if(audioCtx.state==='suspended')await audioCtx.resume();enabled=true;els.soundBtn.disabled=true;save();if(cachedGithubArrayBuffer && !bellBuffer){try{bellBuffer=await audioCtx.decodeAudioData(cachedGithubArrayBuffer.slice(0));els.status.textContent="Cloche GitHub active ✅";refreshSummary();}catch(e){console.error(e);}}}
+els.bellVol.oninput=()=>{if(bellGain)bellGain.gain.value=parseFloat(els.bellVol.value);};
+els.soundBtn.onclick=resumeAudio;els.chooseBtn.onclick=()=>els.file.click();
+els.file.onchange=async()=>{const f=els.file.files?.[0];if(!f)return;await resumeAudio();try{const arr=await f.arrayBuffer();bellBuffer=await audioCtx.decodeAudioData(arr);els.status.textContent=`Cloche chargée ✅ (${f.name}, ${fmt(bellBuffer.duration)})`;refreshSummary();save();}catch(e){console.error(e);bellBuffer=null;els.status.textContent='⚠️ Erreur de décodage du MP3.';refreshSummary();}};
+window.addEventListener('pointerdown',()=>{if(!enabled)resumeAudio();},{once:true});
 
-/* -- timings & résumé -- */
+/* --- timings & résumé --- */
 function getTiming(){
-  const total = bellBuffer ? bellBuffer.duration : 0;
-  const offset = Math.max(0, (parseInt(els.offset.value||'0',10))/1000);
-  const manualUseful = parseFloat(els.useful.value||'');
-  const useful = (!isNaN(manualUseful) && manualUseful>0) ? manualUseful : Math.max(0, total - offset);
-  const first = Math.max(0, parseFloat(els.first.value||'0'));
-  const step  = Math.max(0, parseFloat(els.step.value||'0'));
-  const implied = first + 11*step;
-  const delta = useful - implied;
-  return { total, offset, useful, first, step, implied, delta };
+  const total=bellBuffer?bellBuffer.duration:0;
+  const offset=Math.max(0,num(els.offset.value)/1000);
+  const manual=num(els.useful.value);
+  const useful=(manual>0)?manual:Math.max(0,total-offset);
+  const first=num(els.first.value);
+  const step=num(els.step.value);
+  const implied=first+11*step;
+  const delta=useful-implied;
+  return {total,offset,useful,first,step,implied,delta};
 }
 function refreshSummary(){
-  const { total, offset, useful, first, step, implied, delta } = getTiming();
-  const ok = Math.abs(delta) <= 0.25;
-  els.summary.innerHTML = bellBuffer
-    ? `Total MP3=${fmt(total)} | Offset=${fmt(offset)} | Utile=${fmt(useful)} | First=${fmt(first)} | Step=${fmt(step)} | Total impliqué=${fmt(implied)} ` +
-      (ok ? `<span class="ok">(écart ${fmt(delta)})</span>` : `<span class="warn">(écart ${fmt(delta)})</span>`)
-    : '—';
+  const {total,offset,useful,first,step,implied,delta}=getTiming();
+  els.summary.innerHTML=bellBuffer?`Total MP3=${fmt(total)} | Offset=${fmt(offset)} | Utile=${fmt(useful)} | First=${fmt(first)} | Step=${fmt(step)} | Total impliqué=${fmt(implied)} `+ (Math.abs(delta)<=0.25?`<span class="ok">(écart ${fmt(delta)})</span>`:`<span class="warn">(écart ${fmt(delta)})</span>`):'—';
+  updateNext();
 }
-function fmt(s){ return (Math.round(s*100)/100)+'s'; }
+function updateNext(){
+  const n=new Date(); const m=n.getMinutes(); const s=n.getSeconds();
+  const nextMin = (m<30)?30:60;
+  const inSec = ((nextMin-m-1)*60)+(60-s);
+  els.next.textContent=`Prochaine sonnerie dans ~${inSec}s (${nextMin===60?'heure pleine':'demi-heure'})`;
+}
 
-/* -- lecture portion -- */
-function playBellRange(startSec, durSec){
-  if(!bellBuffer){ els.status.textContent='⚠️ Charge un MP3 ou vérifie l’URL GitHub.'; return; }
+/* --- lecture portion --- */
+function playRange(startSec,durSec){
+  if(!bellBuffer){els.status.textContent='⚠️ Charge un MP3 ou vérifie l’URL GitHub.';return;}
   const total=bellBuffer.duration;
-  const start=Math.min(Math.max(startSec,0), Math.max(total-0.05,0));
-  const dur=Math.max(0.05, Math.min(durSec, total-start));
+  const start=Math.min(Math.max(startSec,0),Math.max(total-0.05,0));
+  const dur=Math.max(0.05,Math.min(durSec,total-start));
   const t0=audioCtx.currentTime;
   const src=audioCtx.createBufferSource(); src.buffer=bellBuffer;
   const g=audioCtx.createGain();
@@ -213,38 +157,34 @@ function playBellRange(startSec, durSec){
   g.gain.setValueAtTime(1,t0+dur-0.05);
   g.gain.linearRampToValueAtTime(0,t0+dur);
   src.connect(g).connect(bellGain ?? audioCtx.destination);
-  src.start(t0, start, dur);
+  src.start(t0,start,dur);
 }
 
-/* -- planification : :30 -> First | :00 -> First+(h-1)*Step -- */
+/* --- planif robuste : :30 => First ; :00 => First+(h-1)*Step  --- */
 (function schedule(){
-  const now=new Date(), wait=1000-now.getMilliseconds();
-  setTimeout(()=>{
-    const t=new Date(); const s=t.getSeconds(), m=t.getMinutes(), h24=t.getHours();
-    const h12=(h24%12)||12;
-    if(m===30 && s===0){            // DEMI-HEURE : 1 coup
-      const key=`half-${t.toDateString()}-${h24}`;
-      if(key!==lastHalfKey){ lastHalfKey=key; const {offset, first}=getTiming(); if(enabled) playBellRange(offset, first); }
+  const tick=()=>{ const now=new Date(); const ms=now.getMilliseconds(); const s=now.getSeconds(); const m=now.getMinutes(); const h24=now.getHours(); const h12=(h24%12)||12;
+    // clé anti-doublon par minute
+    const minuteKey = now.getFullYear()+"-"+(now.getMonth()+1)+"-"+now.getDate()+" "+h24+":"+m;
+    // tolérance autour de la seconde 0 (±200 ms)
+    const atZero = (s===0) || (s===59 && ms>800) || (s===0 && ms<200);
+    if(atZero && minuteKey!==lastMinuteKey){
+      lastMinuteKey=minuteKey;
+      if(!enabled){updateNext(); return;}
+      const {offset,useful,first,step}=getTiming();
+      if(m===30){ playRange(offset, first); }
+      if(m===0){  const dur=Math.min(useful, first + (h12-1)*step); playRange(offset, dur); }
+      updateNext();
     }
-    if(m===0 && s===0 && h24!==lastHour){  // HEURE PLEINE : n coups
-      lastHour=h24;
-      const {offset, useful, first, step}=getTiming();
-      const dur=Math.min(useful, first + (h12-1)*step);
-      if(enabled) playBellRange(offset, dur);
-    }
-    schedule();
-  }, wait);
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 })();
 
-/* -- plein écran -- */
-document.getElementById('fs').onclick=async()=>{
-  const el=document.documentElement;
-  if(!document.fullscreenElement && el.requestFullscreen){ try{ await el.requestFullscreen({navigationUI:"hide"});}catch{} }
-  else if(document.exitFullscreen){ try{ await document.exitFullscreen(); }catch{} }
-};
+/* --- plein écran --- */
+fs.onclick=async()=>{const el=document.documentElement;if(!document.fullscreenElement&&el.requestFullscreen){try{await el.requestFullscreen({navigationUI:"hide"});}catch{}}else if(document.exitFullscreen){try{await document.exitFullscreen();}catch{}}};
 
-/* activer audio au 1er toucher (mobile) */
-window.addEventListener('pointerdown', ()=>{ if(!enabled) resumeAudio(); }, {once:true});
+/* init résumé */
+refreshSummary();
 </script>
 </body>
-    </html>
+</html>
