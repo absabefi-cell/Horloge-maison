@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Horloge + Cloche — version ajustée</title>
+<title>Horloge + 1 coup de cloche</title>
 <style>
   :root { --bg:#0a0f1a; --fg:#eaf2fb; --yellow:#ffeb3b; --ring:#3a6cc9; }
   *{ box-sizing:border-box }
@@ -14,12 +14,12 @@
   .btn{ background:#16294a; border:1px solid var(--ring); color:var(--fg); padding:8px 12px; border-radius:12px; font-weight:700 }
   .btn:disabled{ opacity:.6 }
   label{ font-size:.95rem; opacity:.9 }
-  input,select{ background:#0d1a33; border:1px solid var(--ring); color:var(--fg); border-radius:10px; padding:6px 8px }
+  input{ background:#0d1a33; border:1px solid var(--ring); color:var(--fg); border-radius:10px; padding:6px 8px }
   input[type="number"]{ width:92px }
   input[type="range"]{ width:140px }
 
-  .stage{ height:calc(100svh - 190px); display:grid; place-items:center; padding:6px }
-  .clock{ width:min(92vmin, 900px); aspect-ratio:1/1; transform:translateY(-30px); } /* <-- remontée vers le haut */
+  .stage{ height:calc(100svh - 170px); display:grid; place-items:center; padding:6px }
+  .clock{ width:min(92vmin, 900px); aspect-ratio:1/1; transform:translateY(-30px); } /* horloge un peu plus haut */
   svg{ display:block; user-select:none; -webkit-user-select:none; touch-action:manipulation }
 
   .card{ width:min(940px,96vw); border:1px solid var(--ring); border-radius:14px; padding:10px; background:#0f1622; margin:8px auto 0 }
@@ -31,23 +31,18 @@
 <header>
   <button id="soundBtn" class="btn">🔊 Activer le son</button>
   <button id="chooseBtn" class="btn">🔔 Choisir cloche.mp3</button>
+  <input id="file" type="file" accept="audio/*" hidden />
 
   <label for="first">First(s)</label><input id="first" type="number" step="0.01" min="0" value="4.5">
-  <label for="step">Step(s)</label><input id="step" type="number" step="0.001" min="0" value="1.47">
   <label for="useful">Utile(s)</label><input id="useful" type="number" step="0.01" min="0" placeholder="(auto)">
   <label for="offset">Offset(ms)</label><input id="offset" type="number" step="10" min="0" value="0">
   <label for="bellVol">Vol cloche</label><input id="bellVol" type="range" min="0" max="1" step="0.01" value="1">
 
-  <!-- menu n supprimé -->
-  <button id="testFirst" class="btn" disabled>▶️ 1er coup</button>
-  <button id="testCum" class="btn"   disabled>▶️ 0→12</button>
-  <button id="testNow" class="btn"   disabled>🕛 Heure actuelle</button>
-
   <button id="fs" class="btn">⛶ Plein écran</button>
-  <input id="file" type="file" accept="audio/*" hidden />
 </header>
 
 <div class="stage">
+  <!-- HORLOGE SVG (sans balancier) -->
   <svg class="clock" viewBox="0 0 1000 1000" aria-label="Horloge">
     <defs>
       <radialGradient id="gDial" cx="50%" cy="42%" r="70%">
@@ -65,71 +60,185 @@
 
     <circle cx="500" cy="500" r="470" fill="url(#gDial)" stroke="#3a6cc9" stroke-width="18" />
     <g id="minTicks" opacity=".28" stroke="#c9dcff"><g id="mTick"><line x1="500" y1="74" x2="500" y2="98" stroke-width="7"/></g></g>
-    <g id="numbers" fill="var(--yellow)" stroke="#000" stroke-width="6" stroke-linejoin="round"
+    <g id="numbers" fill="#ffeb3b" stroke="#000" stroke-width="6" stroke-linejoin="round"
        font-size="90" font-family="system-ui,Segoe UI,Roboto,Arial,sans-serif"
        text-anchor="middle" dominant-baseline="middle" filter="url(#glowText)"></g>
-    <g id="hands" stroke="var(--yellow)" stroke-linecap="round" filter="url(#glowHands)">
+    <g id="hands" stroke="#ffeb3b" stroke-linecap="round" filter="url(#glowHands)">
       <line id="hHour"   x1="500" y1="500" x2="500" y2="260" stroke-width="16"/>
       <line id="hMinute" x1="500" y1="500" x2="500" y2="200" stroke-width="10"/>
       <line id="hSecond" x1="500" y1="520" x2="500" y2="180" stroke="#fffab0" stroke-width="6"/>
-      <circle cx="500" cy="500" r="14" fill="var(--yellow)" stroke="#000" stroke-width="4"/>
+      <circle cx="500" cy="500" r="14" fill="#ffeb3b" stroke="#000" stroke-width="4"/>
     </g>
   </svg>
 </div>
 
 <div class="card mono">
-  <div id="status">Charge ton MP3. À XX:30 → First. À XX:00 → First + (12−1)×Step.</div>
+  <div id="status">Cloche GitHub : chargement…</div>
   <div id="summary">—</div>
 </div>
 
 <script>
-/* --- dessin horloge --- */
-(function(){
-  const g=document.getElementById('minTicks');
-  for(let i=0;i<60;i++){
-    const u=document.createElementNS('http://www.w3.org/2000/svg','use');
+/* =================== Horloge (graduations + chiffres) =================== */
+(function(){ const g=document.getElementById('minTicks');
+  for(let i=0;i<60;i++){ const u=document.createElementNS('http://www.w3.org/2000/svg','use');
     u.setAttributeNS('http://www.w3.org/1999/xlink','href','#mTick');
-    u.setAttribute('transform',`rotate(${i*6} 500 500)`);
-    g.appendChild(u);
-  }
-})();
-(function(){
-  const g=document.getElementById('numbers'); const cx=500, cy=500, r=430;
-  for(let i=1;i<=12;i++){
-    const a=(i-3)*30*Math.PI/180, x=cx+r*Math.cos(a), y=cy+r*Math.sin(a);
-    const t=document.createElementNS('http://www.w3.org/2000/svg','text');
-    t.setAttribute('x',x.toFixed(1)); t.setAttribute('y',y.toFixed(1)); t.textContent=i; g.appendChild(t);
-  }
-})();
+    u.setAttribute('transform',`rotate(${i*6} 500 500)`); g.appendChild(u); }})();
+(function(){ const g=document.getElementById('numbers'); const cx=500, cy=500, r=430;
+  for(let i=1;i<=12;i++){ const a=(i-3)*30*Math.PI/180, x=cx+r*Math.cos(a), y=cy+r*Math.sin(a);
+    const t=document.createElementNS('http://www.w3.org/2000/svg','text'); t.setAttribute('x',x.toFixed(1));
+    t.setAttribute('y',y.toFixed(1)); t.textContent=i; g.appendChild(t);} })();
 const hH=document.getElementById('hHour'), hM=document.getElementById('hMinute'), hS=document.getElementById('hSecond');
-(function loop(){
-  const now=new Date();
-  const s=now.getSeconds()+now.getMilliseconds()/1000;
-  const m=now.getMinutes()+s/60;
-  const h=(now.getHours()%12)+m/60;
-  hS.setAttribute('transform',`rotate(${s*6} 500 500)`);
-  hM.setAttribute('transform',`rotate(${m*6} 500 500)`);
-  hH.setAttribute('transform',`rotate(${h*30} 500 500)`);
-  requestAnimationFrame(loop);
+(function loop(){ const now=new Date(); const s=now.getSeconds()+now.getMilliseconds()/1000;
+  const m=now.getMinutes()+s/60; const h=(now.getHours()%12)+m/60;
+  hS.setAttribute('transform',`rotate(${s*6} 500 500)`); hM.setAttribute('transform',`rotate(${m*6} 500 500)`);
+  hH.setAttribute('transform',`rotate(${h*30} 500 500)`); requestAnimationFrame(loop); })();
+
+/* ===================== Audio : 1 seul coup ===================== */
+/* Remplacé par ton RAW GitHub : */
+const DEFAULT_BELL_URL = "https://raw.githubusercontent.com/absabefi-cell/Horloge-maison/main/Cloche.mp3";
+
+let audioCtx=null, bellBuffer=null, bellGain=null, enabled=false;
+let cachedGithubArrayBuffer=null;
+let lastHour=-1, lastHalfKey="";
+
+const els = {
+  soundBtn:  document.getElementById('soundBtn'),
+  chooseBtn: document.getElementById('chooseBtn'),
+  file:      document.getElementById('file'),
+  first:     document.getElementById('first'),
+  useful:    document.getElementById('useful'),
+  offset:    document.getElementById('offset'),
+  bellVol:   document.getElementById('bellVol'),
+  status:    document.getElementById('status'),
+  summary:   document.getElementById('summary'),
+};
+
+/* --------- sauvegarde réglages --------- */
+function saveSettings(){
+  localStorage.setItem("bell:first", els.first.value);
+  localStorage.setItem("bell:useful",els.useful.value);
+  localStorage.setItem("bell:offset",els.offset.value);
+  localStorage.setItem("bell:vol",   els.bellVol.value);
+  localStorage.setItem("bell:url",   DEFAULT_BELL_URL);
+}
+function loadSettings(){
+  els.first.value  = localStorage.getItem("bell:first")  ?? els.first.value;
+  els.useful.value = localStorage.getItem("bell:useful") ?? els.useful.value;
+  els.offset.value = localStorage.getItem("bell:offset") ?? els.offset.value;
+  els.bellVol.value= localStorage.getItem("bell:vol")    ?? els.bellVol.value;
+}
+[els.first,els.useful,els.offset,els.bellVol].forEach(e=>e.addEventListener('input',()=>{refreshSummary(); saveSettings();}));
+loadSettings();
+
+/* --------- préchargement GitHub --------- */
+(async function preloadGithub(){
+  try{
+    const url = localStorage.getItem("bell:url") || DEFAULT_BELL_URL;
+    const res = await fetch(url, {mode:"cors"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    cachedGithubArrayBuffer = await res.arrayBuffer();
+    els.status.textContent = "Cloche GitHub préchargée ✅ (touche l’écran pour autoriser le son)";
+  }catch(e){
+    els.status.textContent = "⚠️ Échec chargement GitHub (vérifie l’URL RAW).";
+    console.error(e);
+  }
 })();
 
-/* --- cloche audio --- */
-let audioCtx,bellBuffer,bellGain;let lastHour=-1,lastHalfKey="";
-const firstEl=first,stepEl=step,usefulEl=useful,offsetEl=offset,bellVolEl=bellVol;
-const fmt=s=>Math.round(s*100)/100+"s";
-function ensureAudio(){if(!audioCtx){audioCtx=new(window.AudioContext||window.webkitAudioContext)();bellGain=audioCtx.createGain();bellGain.connect(audioCtx.destination);}}
-async function resumeAudio(){ensureAudio();if(audioCtx.state==='suspended')await audioCtx.resume();soundBtn.disabled=true;}
-bellVolEl.oninput=()=>{if(bellGain)bellGain.gain.value=parseFloat(bellVolEl.value);};
-soundBtn.onclick=resumeAudio;chooseBtn.onclick=()=>file.click();
-file.onchange=async()=>{const f=file.files?.[0];if(!f)return;await resumeAudio();const arr=await f.arrayBuffer();bellBuffer=await audioCtx.decodeAudioData(arr);status.textContent=`Cloche chargée ✅ (${f.name}, ${fmt(bellBuffer.duration)})`;testFirst.disabled=false;testCum.disabled=false;refresh();};
-function getT(){const total=bellBuffer?bellBuffer.duration:0;const offset=parseInt(offsetEl.value||0)/1000;const manual=parseFloat(usefulEl.value||'');const useful=!isNaN(manual)&&manual>0?manual:Math.max(0,total-offset);const first=parseFloat(firstEl.value||0);const step=parseFloat(stepEl.value||0);const implied=first+11*step;return{total,offset,useful,first,step,implied,delta:useful-implied};}
-function refresh(){const{total,offset,useful,first,step,implied,delta}=getT();summary.innerHTML=bellBuffer?`Total=${fmt(total)} | Offset=${fmt(offset)} | Utile=${fmt(useful)} | First=${fmt(first)} | Step=${fmt(step)} | Total impl.=${fmt(implied)} <span class="${Math.abs(delta)<.25?'ok':'warn'}">(écart ${fmt(delta)})</span>`:'—';}
-[firstEl,stepEl,usefulEl,offsetEl].forEach(e=>e.addEventListener('input',refresh));
-function playRange(start,dur){if(!bellBuffer)return;const t0=audioCtx.currentTime;const src=audioCtx.createBufferSource();src.buffer=bellBuffer;const g=audioCtx.createGain();g.gain.value=1;src.connect(g).connect(bellGain);src.start(t0,start,dur);src.stop(t0+dur+.05);}
-testFirst.onclick=()=>{resumeAudio();const{offset,first}=getT();playRange(offset,first);};
-testCum.onclick=()=>{resumeAudio();const{offset,useful,first,step}=getT();const dur=Math.min(useful,first+11*step);playRange(offset,dur);};
-testNow.onclick=()=>{const now=new Date();const h12=(now.getHours()%12)||12;const{offset,useful,first,step}=getT();const dur=Math.min(useful,first+(h12-1)*step);playRange(offset,dur);};
-(function tick(){const now=new Date(),w=1000-now.getMilliseconds();setTimeout(()=>{const t=new Date(),s=t.getSeconds(),m=t.getMinutes(),h=t.getHours(),h12=(h%12)||12;if(m===30&&s===0){const k=`half-${t.toDateString()}-${h}`;if(k!==lastHalfKey){lastHalfKey=k;const{offset,first}=getT();playRange(offset,first);}}if(m===0&&s===0&&h!==lastHour){lastHour=h;const{offset,useful,first,step}=getT();const d=Math.min(useful,first+(h12-1)*step);playRange(offset,d);}tick();},w);})();
+function ensureAudio(){
+  if(!audioCtx){
+    audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    bellGain=audioCtx.createGain();
+    bellGain.gain.value=parseFloat(els.bellVol.value);
+    bellGain.connect(audioCtx.destination);
+  }
+}
+async function resumeAudio(){
+  ensureAudio();
+  if(audioCtx.state==='suspended') await audioCtx.resume();
+  enabled=true; els.soundBtn.disabled=true; saveSettings();
+  if(cachedGithubArrayBuffer && !bellBuffer){
+    try{
+      bellBuffer = await audioCtx.decodeAudioData(cachedGithubArrayBuffer.slice(0));
+      els.status.textContent = "Cloche GitHub active ✅";
+      refreshSummary();
+    }catch(e){ console.error(e); }
+  }
+}
+els.bellVol.oninput=()=>{ if(bellGain) bellGain.gain.value=parseFloat(els.bellVol.value); };
+els.soundBtn.onclick=resumeAudio;
+els.chooseBtn.onclick=()=>els.file.click();
+/* fichier local (optionnel) */
+els.file.onchange=async()=>{
+  const f=els.file.files?.[0]; if(!f) return;
+  await resumeAudio();
+  try{
+    const arr=await f.arrayBuffer();
+    bellBuffer=await audioCtx.decodeAudioData(arr);
+    els.status.textContent=`Cloche chargée ✅ (${f.name}, ${fmt(bellBuffer.duration)})`;
+    refreshSummary(); saveSettings();
+  }catch(e){
+    console.error(e);
+    bellBuffer=null;
+    els.status.textContent='⚠️ Erreur de décodage du MP3.'; refreshSummary();
+  }
+};
+
+/* --------- infos / résumé --------- */
+function getTiming(){
+  const total = bellBuffer ? bellBuffer.duration : 0;
+  const offset = Math.max(0, (parseInt(els.offset.value||'0',10))/1000);
+  const manualUseful = parseFloat(els.useful.value||'');
+  const useful = (!isNaN(manualUseful) && manualUseful>0) ? manualUseful : Math.max(0, total - offset);
+  const first = Math.max(0, parseFloat(els.first.value||'0'));
+  return { total, offset, useful, first };
+}
+function refreshSummary(){
+  const { total, offset, useful, first } = getTiming();
+  els.summary.textContent = bellBuffer
+    ? `Total MP3=${fmt(total)} | Offset=${fmt(offset)} | Utile=${fmt(useful)} | First=${fmt(first)}`
+    : '—';
+}
+function fmt(s){ return (Math.round(s*100)/100)+'s'; }
+
+/* --------- lecture d'une portion (1 coup) --------- */
+function playOneChime(){
+  if(!bellBuffer){ els.status.textContent='⚠️ Charge un MP3 ou vérifie l’URL GitHub.'; return; }
+  const {offset, first, useful} = getTiming();
+  const total=bellBuffer.duration;
+  const start=Math.min(Math.max(offset,0), Math.max(total-0.05,0));
+  const dur=Math.max(0.05, Math.min(first || useful || 0.5, total-start));
+  const t0=audioCtx.currentTime;
+  const src=audioCtx.createBufferSource(); src.buffer=bellBuffer;
+  const g=audioCtx.createGain();
+  g.gain.setValueAtTime(1,t0);
+  g.gain.setValueAtTime(1,t0+dur-0.05);
+  g.gain.linearRampToValueAtTime(0,t0+dur);
+  src.connect(g).connect(bellGain ?? audioCtx.destination);
+  src.start(t0, start, dur);
+}
+
+/* --------- planification : 1 coup à :30 et :00 --------- */
+(function schedule(){
+  const now=new Date(), wait=1000-now.getMilliseconds();
+  setTimeout(()=>{
+    const t=new Date(); const s=t.getSeconds(), m=t.getMinutes(), h=t.getHours();
+    if((m===0 || m===30) && s===0){
+      const key=`${t.toDateString()}-${h}-${m}`;
+      if(key!==lastHalfKey){ lastHalfKey=key; if(enabled) playOneChime(); }
+    }
+    schedule();
+  }, wait);
+})();
+
+/* --------- plein écran --------- */
+document.getElementById('fs').onclick=async()=>{
+  const el=document.documentElement;
+  if(!document.fullscreenElement && el.requestFullscreen){ try{ await el.requestFullscreen({navigationUI:"hide"});}catch{} }
+  else if(document.exitFullscreen){ try{ await document.exitFullscreen(); }catch{} }
+};
+
+/* activer audio au 1er toucher n'importe où (mobile) */
+window.addEventListener('pointerdown', ()=>{ if(!enabled) resumeAudio(); }, {once:true});
 </script>
 </body>
   </html>
