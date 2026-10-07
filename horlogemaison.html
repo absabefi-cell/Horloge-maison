@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Horloge + cloche (demi & heures) – robuste</title>
+<style>
+  :root { --bg:#0a0f1a; --fg:#eaf2fb; --yellow:#ffeb3b; --ring:#3a6cc9; }
+  *{ box-sizing:border-box }
+  html,body{ height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif; }
+
+  [hidden]{display:none !important}
+  #timerDisplay{font-size:1.6rem;color:var(--yellow)}
+  header{ padding:8px 10px; display:flex; flex-wrap:wrap; gap:10px; justify-content:center; align-items:center }
+  .btn{ background:#16294a; border:1px solid var(--ring); color:var(--fg); padding:8px 12px; border-radius:12px; font-weight:700 }
+  .btn:disabled{ opacity:.6 }
+  label{ font-size:.95rem; opacity:.9 }
+  input{ background:#0d1a33; border:1px solid var(--ring); color:var(--fg); border-radius:10px; padding:6px 8px }
+  input[type="number"]{ width:92px }
+  input[type="range"]{ width:140px }
+
+  .stage{ min-height:260px; height:calc(100svh - 370px); display:grid; place-items:center; padding:6px }
+  .clock{ width:min(92vmin, 900px); aspect-ratio:1/1; max-height:100%; transform:translateY(0); } /* horloge un peu plus haut */
+  svg{ display:block; user-select:none; -webkit-user-select:none; touch-action:manipulation }
+
+  .card{ width:min(940px,96vw); border:1px solid var(--ring); border-radius:14px; padding:10px; background:#0f1622; margin:8px auto 0 }
+  .mono{ font-family:ui-monospace, Menlo, Consolas, monospace; font-size:.95rem }
+  .ok{ color:#9be28c } .warn{ color:#ff9898 }
+  .dim{ opacity:.8 }
+  .quran{margin:10px auto; padding:14px;}
+  .quran h1{font-size:1.1rem;margin:0 0 12px;color:var(--yellow)}
+  .qgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .qfield{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .qfield input,.qfield select{width:100%;min-width:0;background:#0d1a33;color:var(--fg);border:1px solid var(--ring);border-radius:10px;padding:10px;font:inherit}
+  .qactions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}
+  .quran audio{width:100%;display:block}
+  #qMessage{font-size:.9rem;margin:10px 0 0;overflow-wrap:anywhere}
+  @media(max-width:520px){.qgrid{grid-template-columns:1fr}.stage{height:90vw}.clock{width:90vw}header input[type=text]{width:80px}}
+
+  /* Disposition compacte : lecteur, horloge centrale, minuterie en bas. */
+  body{min-height:100svh;height:auto;display:flex;flex-direction:column;gap:4px;padding:4px 0 max(4px,env(safe-area-inset-bottom))}
+  .quran{flex:none;width:min(720px,96vw);margin:0 auto;padding:7px 9px;border-radius:12px}
+  .quran h1{font-size:.85rem;margin:0 0 5px}
+  .qgrid{grid-template-columns:1fr 1fr;gap:5px 8px}
+  .qfield{gap:3px}
+  .qfield label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .qfield input,.qfield select{padding:5px 7px;font-size:.8rem;height:32px;border-radius:7px}
+  .qactions{gap:5px;margin:5px 0}
+  .quran .btn{padding:5px 9px;font-size:.78rem;border-radius:8px;min-height:30px}
+  .quran audio{height:32px}
+  #qMessage{font-size:.7rem;line-height:1.2;margin:4px 0 0}
+  .quran>p.dim{display:none}
+  .stage{flex:1;min-height:180px;height:auto;display:flex;align-items:center;justify-content:center;padding:0;margin:0;width:100%}
+  .clock{width:min(94vw,calc(100svh - 285px),700px);height:auto;max-height:none;flex:none}
+  .timer{flex:none;width:min(720px,96vw);margin:0 auto;padding:5px 7px;border-radius:10px}
+  .timer .qactions{justify-content:center;gap:5px;margin:0;flex-wrap:wrap}
+  .timer label{font-size:.72rem}
+  .timer input[type=number]{width:48px;padding:4px;font-size:.8rem;height:30px}
+  .timer .btn{padding:5px 6px;font-size:.72rem;border-radius:7px;min-height:30px}
+  #timerDisplay{font-size:1rem;white-space:nowrap}
+  #timerMessage{font-size:.65rem;line-height:1.2;margin:3px 0 0;text-align:center}
+  @media(max-height:500px) and (min-width:600px){.clock{width:240px}.stage{min-height:240px}}
+
+  .qheading{display:flex;direction:ltr;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}
+  .qheading h1{direction:rtl;margin:0}
+  .portraitButton{width:42px;height:42px;padding:0;border:1px solid var(--ring);border-radius:50%;overflow:hidden;background:#16294a;color:var(--fg);flex:none;position:relative;cursor:pointer}
+  .portraitButton img{width:100%;height:100%;object-fit:cover;display:block}
+  #qPortraitFallback{font-size:24px}
+  .qvolume{display:flex;align-items:center;gap:6px;direction:ltr;flex:1;min-width:115px;max-width:230px;margin-inline-start:auto}
+  .qvolume input[type=range]{width:100%;min-width:40px;padding:0;accent-color:var(--yellow)}
+  .qvolume output{font-size:.7rem;min-width:32px}
+
+  /* Adaptation à la surface réellement disponible, y compris TV et plein écran. */
+  .screenTools{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;padding:6px 10px;width:100%;flex:none}
+  .screenTools select{background:#16294a;color:var(--fg);border:1px solid var(--ring);border-radius:8px;padding:7px;font:inherit}
+  .screenTools input{width:110px;accent-color:var(--yellow)}
+  .screenTools output{min-width:3em}
+  .screenTools .btn:focus-visible,.screenTools select:focus-visible{outline:3px solid var(--yellow);outline-offset:3px}
+  body{--ui-size:16px;--clock-size:300px}
+  .stage{min-height:0;flex:1}
+  .clock{width:var(--clock-size);height:var(--clock-size);max-width:none;max-height:none}
+  body.wideScreen{height:100svh;min-height:0;display:grid;grid-template-columns:minmax(280px,27vw) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;gap:12px;padding:12px;font-size:var(--ui-size)}
+  .wideScreen .screenTools{grid-column:1 / -1;font-size:1em;padding:0}
+  .wideScreen .screenTools label{font-size:1em}
+  .wideScreen .screenTools .btn{font-size:1em}
+  .wideScreen .quran{grid-column:1;grid-row:2 / 4;align-self:center;width:100%;margin:0;padding:1em}
+  .wideScreen .qgrid{grid-template-columns:1fr;gap:.7em}
+  .wideScreen .qfield input,.wideScreen .qfield select{font-size:1em;height:auto;min-height:2.5em;padding:.55em}
+  .wideScreen .qheading h1{font-size:1.1em}
+  .wideScreen .portraitButton{width:2.7em;height:2.7em}
+  .wideScreen .qactions{gap:.5em;margin:.7em 0}
+  .wideScreen .quran .btn{font-size:1em;padding:.6em}
+  .wideScreen .qvolume{max-width:none;flex-basis:100%}
+  .wideScreen .qvolume output{font-size:.9em}
+  .wideScreen .quran audio{height:46px}
+  .wideScreen #qMessage{font-size:.85em;line-height:1.4}
+  .wideScreen .stage{grid-column:2;grid-row:2;width:100%;height:100%;overflow:hidden}
+  .wideScreen .timer{grid-column:2;grid-row:3;width:100%;padding:.5em}
+  .wideScreen .timer label,.wideScreen .timer .btn{font-size:.85em}
+  .wideScreen .timer .btn{padding:.5em .7em}
+  .wideScreen .timer input[type=number]{font-size:1em;width:3.5em;height:auto}
+  .wideScreen #timerDisplay{font-size:1.4em}
+  .wideScreen #timerMessage{font-size:.7em}
+
+</style>
+</head>
+<body>
+<div class="screenTools" aria-label="Adapter l’écran">
+<label for="screenMode">Écran</label><select id="screenMode"><option value="auto">Auto</option><option value="tv">TV / grand écran</option><option value="phone">Téléphone</option></select>
+<label for="screenZoom">Taille</label><input id="screenZoom" type="range" min="70" max="130" step="5" value="100"><output id="screenZoomValue" for="screenZoom">100%</output>
+<button id="screenFullscreen" class="btn" type="button">⛶ Plein écran</button>
+</div>
+<section class="card quran" dir="rtl" lang="ar" aria-label="قارئ القرآن الكريم">
+  <div class="qheading"><button type="button" class="portraitButton" id="qPortraitButton" aria-label="Choisir une photo du réciteur" title="Choisir une photo du réciteur"><span id="qPortraitFallback">👤</span><img id="qPortrait" alt="" hidden></button><h1>📖 القرآن الكريم</h1></div>
+  <input id="qPortraitFile" type="file" accept="image/*" hidden>
+  <div class="qgrid">
+    <div class="qfield"><label for="qRecSearch">البحث عن قارئ</label><input id="qRecSearch" type="search" placeholder="اسم القارئ…" disabled><label for="qReciter">القارئ</label><select id="qReciter" disabled><option>جارٍ التحميل…</option></select></div>
+    <div class="qfield"><label for="qSurSearch">البحث عن سورة</label><input id="qSurSearch" type="search" placeholder="اسم السورة أو رقمها…" disabled><label for="qSurah">السورة</label><select id="qSurah" disabled><option>جارٍ التحميل…</option></select></div>
+    <div class="qfield" id="qVersionField" hidden><label for="qVersion">الرواية</label><select id="qVersion"></select></div>
+  </div>
+  <div class="qactions"><button class="btn" id="qListen" disabled>▶ تشغيل</button><button class="btn" id="qStop" disabled>⏹ إيقاف</button><button class="btn" id="qRetry" hidden>↻ إعادة المحاولة</button><div class="qvolume"><label for="qVolume" aria-label="Volume de la récitation">🔊</label><input id="qVolume" type="range" min="0" max="100" step="1" value="100" aria-label="Volume de la récitation"><output id="qVolumeValue" for="qVolume">100%</output></div></div>
+  <audio id="qAudio" controls preload="none"></audio>
+  <p id="qMessage" role="status" aria-live="polite">جارٍ تحميل القراء والسور…</p>
+  <p class="dim" style="font-size:.8rem;margin:6px 0 0">يتطلب اتصالاً بالإنترنت · الصوت : <a href="https://www.mp3quran.net/ar" target="_blank" rel="noopener" style="color:#bcd6ff">MP3Quran</a></p>
+</section>
+
+<header hidden>
+  <button id="soundBtn" class="btn">🔊 Activer le son</button>
+  <button id="chooseBtn" class="btn">🔔 Choisir cloche.mp3</button>
+  <input id="file" type="file" accept="audio/*" hidden />
+
+  <label for="first">First(s)</label><input id="first" type="text" value="4,5">
+  <label for="step">Step(s)</label><input id="step"  type="text" value="1,47">
+  <label for="useful">Utile(s)</label><input id="useful" type="text" placeholder="(auto)">
+  <label for="offset">Offset(ms)</label><input id="offset" type="text" value="0">
+  <label for="bellVol">Vol cloche</label><input id="bellVol" type="range" min="0" max="1" step="0.01" value="1">
+
+  <button id="fs" class="btn">⛶ Plein écran</button>
+</header>
+
+<div class="stage">
+  <!-- HORLOGE SVG (sans balancier) -->
+  <svg class="clock" viewBox="0 0 1000 1000" aria-label="Horloge">
+    <defs>
+      <radialGradient id="gDial" cx="50%" cy="42%" r="70%">
+        <stop offset="0%"  stop-color="#2860ba"/><stop offset="70%" stop-color="#123a85"/><stop offset="100%" stop-color="#0a1730"/>
+      </radialGradient>
+      <filter id="glowHands" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="glowText" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+
+    <circle cx="500" cy="500" r="470" fill="url(#gDial)" stroke="#3a6cc9" stroke-width="18" />
+    <g id="minTicks" opacity=".28" stroke="#c9dcff"><g id="mTick"><line x1="500" y1="74" x2="500" y2="98" stroke-width="7"/></g></g>
+    <g id="numbers" fill="#ffeb3b" stroke="#000" stroke-width="6" stroke-linejoin="round"
+       font-size="90" font-family="system-ui,Segoe UI,Roboto,Arial,sans-serif"
+       text-anchor="middle" dominant-baseline="middle" filter="url(#glowText)"></g>
+    <g id="hands" stroke="#ffeb3b" stroke-linecap="round" filter="url(#glowHands)">
+      <line id="hHour"   x1="500" y1="500" x2="500" y2="260" stroke-width="16"/>
+      <line id="hMinute" x1="500" y1="500" x2="500" y2="200" stroke-width="10"/>
+      <line id="hSecond" x1="500" y1="520" x2="500" y2="180" stroke="#fffab0" stroke-width="6"/>
+      <circle cx="500" cy="500" r="14" fill="#ffeb3b" stroke="#000" stroke-width="4"/>
+    </g>
+  </svg>
+</div>
+
+<section class="card timer" aria-label="Minuteur">
+  <div class="qactions"><label for="timerMinutes">⏱ Minutes</label>
+  <input id="timerMinutes" type="number" min="1" max="1440" step="1" value="10" inputmode="numeric">
+  <button class="btn" id="timerStart">▶ Démarrer</button><button class="btn" id="timerPause" disabled>⏸ Pause</button><button class="btn" id="timerReset">↺ Annuler</button>
+  <output id="timerDisplay" class="mono" aria-label="Temps restant">10:00</output></div>
+  <p id="timerMessage" role="status" aria-live="polite">À la fin, la récitation s’arrête et une alarme sonne.</p>
+</section>
+
+<div class="card mono" hidden>
+  <div id="status">Cloche GitHub : chargement…</div>
+  <div id="summary" class="dim">—</div>
+  <div id="next" class="dim">Prochaine sonnerie : calcul…</div>
+</div>
+
+<script>
+/* ======= Horloge : graduations + chiffres ======= */
+(function(){const g=document.getElementById('minTicks');for(let i=0;i<60;i++){const u=document.createElementNS('http://www.w3.org/2000/svg','use');u.setAttributeNS('http://www.w3.org/1999/xlink','href','#mTick');u.setAttribute('transform',`rotate(${i*6} 500 500)`);g.appendChild(u);}})();
+(function(){const g=document.getElementById('numbers');const cx=500,cy=500,r=430;for(let i=1;i<=12;i++){const a=(i-3)*30*Math.PI/180,x=cx+r*Math.cos(a),y=cy+r*Math.sin(a);const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('x',x.toFixed(1));t.setAttribute('y',y.toFixed(1));t.textContent=i;g.appendChild(t);}})();
+const hH=document.getElementById('hHour'),hM=document.getElementById('hMinute'),hS=document.getElementById('hSecond');
+(function loop(){const now=new Date();const s=now.getSeconds()+now.getMilliseconds()/1000;const m=now.getMinutes()+s/60;const h=(now.getHours()%12)+m/60;hS.setAttribute('transform',`rotate(${s*6} 500 500)`);hM.setAttribute('transform',`rotate(${m*6} 500 500)`);hH.setAttribute('transform',`rotate(${h*30} 500 500)`);requestAnimationFrame(loop);})();
+
+/* ===================== Audio (GitHub par défaut) ===================== */
+const DEFAULT_BELL_URL="https://raw.githubusercontent.com/absabefi-cell/Horloge-maison/main/Cloche.mp3";
+
+let audioCtx=null,bellBuffer=null,bellGain=null,enabled=false;
+let cachedGithubArrayBuffer=null;
+let lastMinuteKey=""; // anti-doublon par minute
+
+const els=Object.fromEntries(['soundBtn','chooseBtn','file','first','step','useful','offset','bellVol','status','summary','next'].map(id=>[id,document.getElementById(id)]));
+
+/* --- helpers --- */
+const fmt=s=>Math.round(s*100)/100+"s";
+function num(x){ // supporte 4,5 et 1.47
+  const n=parseFloat(String(x).replace(',','.'));
+  return (isNaN(n)||n<0)?0:n;
+}
+
+/* --- persistence --- */
+function save(){localStorage.setItem("bell:first",els.first.value);localStorage.setItem("bell:step",els.step.value);localStorage.setItem("bell:useful",els.useful.value);localStorage.setItem("bell:offset",els.offset.value);localStorage.setItem("bell:vol",els.bellVol.value);localStorage.setItem("bell:url",DEFAULT_BELL_URL);}
+function load(){if(localStorage.getItem("bell:first"))els.first.value=localStorage.getItem("bell:first");if(localStorage.getItem("bell:step"))els.step.value=localStorage.getItem("bell:step");if(localStorage.getItem("bell:useful"))els.useful.value=localStorage.getItem("bell:useful");if(localStorage.getItem("bell:offset"))els.offset.value=localStorage.getItem("bell:offset");if(localStorage.getItem("bell:vol"))els.bellVol.value=localStorage.getItem("bell:vol");}
+[els.first,els.step,els.useful,els.offset,els.bellVol].forEach(e=>e.addEventListener('input',()=>{refreshSummary();save();}));
+load();
+
+/* --- préchargement GitHub --- */
+(async function preload(){
+  try{const url=localStorage.getItem("bell:url")||DEFAULT_BELL_URL;const res=await fetch(url,{mode:"cors"});if(!res.ok)throw new Error("HTTP "+res.status);cachedGithubArrayBuffer=await res.arrayBuffer();els.status.textContent="Cloche GitHub préchargée ✅ (touche l’écran pour autoriser le son)";}
+  catch(e){els.status.textContent="⚠️ Échec chargement GitHub (vérifie l’URL RAW).";console.error(e);}
+})();
+
+/* --- audio ctx --- */
+function ensureAudio(){if(!audioCtx){audioCtx=new(window.AudioContext||window.webkitAudioContext)();bellGain=audioCtx.createGain();bellGain.gain.value=parseFloat(els.bellVol.value);bellGain.connect(audioCtx.destination);}}
+async function resumeAudio(){ensureAudio();if(audioCtx.state==='suspended')await audioCtx.resume();enabled=true;els.soundBtn.disabled=true;save();if(cachedGithubArrayBuffer && !bellBuffer){try{bellBuffer=await audioCtx.decodeAudioData(cachedGithubArrayBuffer.slice(0));els.status.textContent="Cloche GitHub active ✅";refreshSummary();}catch(e){console.error(e);}}}
+els.bellVol.oninput=()=>{if(bellGain)bellGain.gain.value=parseFloat(els.bellVol.value);};
+els.soundBtn.onclick=resumeAudio;els.chooseBtn.onclick=()=>els.file.click();
+els.file.onchange=async()=>{const f=els.file.files?.[0];if(!f)return;await resumeAudio();try{const arr=await f.arrayBuffer();bellBuffer=await audioCtx.decodeAudioData(arr);els.status.textContent=`Cloche chargée ✅ (${f.name}, ${fmt(bellBuffer.duration)})`;refreshSummary();save();}catch(e){console.error(e);bellBuffer=null;els.status.textContent='⚠️ Erreur de décodage du MP3.';refreshSummary();}};
+window.addEventListener('pointerdown',()=>{if(!enabled)resumeAudio();},{once:true});
+
+/* --- timings & résumé --- */
+function getTiming(){
+  const total=bellBuffer?bellBuffer.duration:0;
+  const offset=Math.max(0,num(els.offset.value)/1000);
+  const manual=num(els.useful.value);
+  const useful=(manual>0)?manual:Math.max(0,total-offset);
+  const first=num(els.first.value);
+  const step=num(els.step.value);
+  const implied=first+11*step;
+  const delta=useful-implied;
+  return {total,offset,useful,first,step,implied,delta};
+}
+function refreshSummary(){
+  const {total,offset,useful,first,step,implied,delta}=getTiming();
+  els.summary.innerHTML=bellBuffer?`Total MP3=${fmt(total)} | Offset=${fmt(offset)} | Utile=${fmt(useful)} | First=${fmt(first)} | Step=${fmt(step)} | Total impliqué=${fmt(implied)} `+ (Math.abs(delta)<=0.25?`<span class="ok">(écart ${fmt(delta)})</span>`:`<span class="warn">(écart ${fmt(delta)})</span>`):'—';
+  updateNext();
+}
+function updateNext(){
+  const n=new Date(); const m=n.getMinutes(); const s=n.getSeconds();
+  const nextMin = (m<30)?30:60;
+  const inSec = ((nextMin-m-1)*60)+(60-s);
+  els.next.textContent=`Prochaine sonnerie dans ~${inSec}s (${nextMin===60?'heure pleine':'demi-heure'})`;
+}
+
+/* --- lecture portion --- */
+function playRange(startSec,durSec){
+  if(!bellBuffer){els.status.textContent='⚠️ Charge un MP3 ou vérifie l’URL GitHub.';return;}
+  const total=bellBuffer.duration;
+  const start=Math.min(Math.max(startSec,0),Math.max(total-0.05,0));
+  const dur=Math.max(0.05,Math.min(durSec,total-start));
+  const t0=audioCtx.currentTime;
+  const src=audioCtx.createBufferSource(); src.buffer=bellBuffer;
+  const g=audioCtx.createGain();
+  g.gain.setValueAtTime(1,t0);
+  g.gain.setValueAtTime(1,t0+dur-0.05);
+  g.gain.linearRampToValueAtTime(0,t0+dur);
+  src.connect(g).connect(bellGain ?? audioCtx.destination);
+  src.start(t0,start,dur);
+}
+
+/* --- planif robuste : :30 => First ; :00 => First+(h-1)*Step  --- */
+(function schedule(){
+  const tick=()=>{ const now=new Date(); const ms=now.getMilliseconds(); const s=now.getSeconds(); const m=now.getMinutes(); const h24=now.getHours(); const h12=(h24%12)||12;
+    // clé anti-doublon par minute
+    const minuteKey = now.getFullYear()+"-"+(now.getMonth()+1)+"-"+now.getDate()+" "+h24+":"+m;
+    // tolérance autour de la seconde 0 (±200 ms)
+    const atZero = (s===0) || (s===59 && ms>800) || (s===0 && ms<200);
+    if(atZero && minuteKey!==lastMinuteKey){
+      lastMinuteKey=minuteKey;
+      if(!enabled){updateNext(); return;}
+      const {offset,useful,first,step}=getTiming();
+      if(m===30){ playRange(offset, first); }
+      if(m===0){  const dur=Math.min(useful, first + (h12-1)*step); playRange(offset, dur); }
+      updateNext();
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+})();
+
+/* --- plein écran --- */
+fs.onclick=async()=>{const el=document.documentElement;if(!document.fullscreenElement&&el.requestFullscreen){try{await el.requestFullscreen({navigationUI:"hide"});}catch{}}else if(document.exitFullscreen){try{await document.exitFullscreen();}catch{}}};
+
+/* init résumé */
+refreshSummary();
+</script>
+<script>
+(()=>{
+  const $=id=>document.getElementById(id);
+  const rec=$('qReciter'),sur=$('qSurah'),ver=$('qVersion'),rs=$('qRecSearch'),ss=$('qSurSearch'),audio=$('qAudio'),listen=$('qListen'),stop=$('qStop'),msg=$('qMessage'),retry=$('qRetry');
+  let reciters=[],suwar=[];
+  const portrait=$('qPortrait'),fallback=$('qPortraitFallback'),photoFile=$('qPortraitFile'),volume=$('qVolume'),volumeValue=$('qVolumeValue');
+  let portraitToken=0,photoObjectURL=null;
+  const portraitCache=new Map(),customPortraits=new Map();
+  function showPortrait(src,name){portrait.hidden=!src;fallback.hidden=!!src;portrait.alt=name?'Photo de '+name:'';if(src)portrait.src=src;else portrait.removeAttribute('src');}
+  portrait.onerror=()=>showPortrait(null,currentRec()?.name);
+  async function updatePortrait(r){
+    const token=++portraitToken;showPortrait(null,r?.name);if(!r)return;
+    if(customPortraits.has(String(r.id))){showPortrait(customPortraits.get(String(r.id)),r.name);return;}
+    if(portraitCache.has(r.name)){showPortrait(portraitCache.get(r.name),r.name);return;}
+    // Une page au nom exact évite d'utiliser la photo d'une autre personne.
+    const name=r.name.replace(/^الشيخ\s+/,'').trim();
+    try{const response=await fetch('https://ar.wikipedia.org/w/api.php?origin=*&action=query&format=json&prop=pageimages&piprop=thumbnail&pithumbsize=120&redirects=1&titles='+encodeURIComponent(name));if(!response.ok)return;const data=await response.json();const pages=Object.values(data.query?.pages||{});const src=pages[0]?.thumbnail?.source||null;portraitCache.set(r.name,src);if(token===portraitToken)showPortrait(src,r.name);}catch{}
+  }
+  $('qPortraitButton').onclick=()=>{if(currentRec())photoFile.click();};
+  photoFile.onchange=()=>{const f=photoFile.files?.[0],r=currentRec();if(!f||!r)return;if(!f.type.startsWith('image/'))return;++portraitToken;const old=customPortraits.get(String(r.id));if(old)URL.revokeObjectURL(old);photoObjectURL=URL.createObjectURL(f);customPortraits.set(String(r.id),photoObjectURL);showPortrait(photoObjectURL,r.name);photoFile.value='';};
+  try{const saved=localStorage.getItem('quran:volume');if(saved!==null&&Number.isFinite(Number(saved)))volume.value=String(Math.max(0,Math.min(100,Number(saved))));}catch{}
+  function syncVolume(){const value=Math.round(audio.volume*100);volume.value=String(value);volumeValue.value=value+'%';volumeValue.textContent=value+'%';try{localStorage.setItem('quran:volume',String(value));}catch{}}
+  volume.oninput=()=>{audio.volume=Number(volume.value)/100;audio.muted=false;syncVolume();};
+  audio.addEventListener('volumechange',syncVolume);audio.volume=Number(volume.value)/100;syncVolume();
+
+  const norm=x=>String(x).normalize('NFD').replace(/[\u0300-\u036f\u064B-\u065F\u0670\u0640]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/[٠-٩]/g,c=>'٠١٢٣٤٥٦٧٨٩'.indexOf(c)).replace(/[۰-۹]/g,c=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(c)).toLowerCase().trim();
+  const currentRec=()=>reciters.find(r=>String(r.id)===rec.value);
+  const currentVersion=()=>currentRec()?.moshaf.find(m=>String(m.id)===ver.value);
+  function options(el,items,selected){el.replaceChildren();for(const item of items)el.add(new Option(item.label,String(item.id)));if(items.some(i=>String(i.id)===selected))el.value=selected;el.disabled=!items.length;if(!items.length)el.add(new Option('لا توجد نتائج',''));}
+  function clearAudio(){audio.pause();audio.removeAttribute('src');audio.load();stop.disabled=true;}
+  function updateSurahs(){
+    const old=sur.value,m=currentVersion(),available=new Set(String(m?.surah_list||'').split(',').map(Number)),q=norm(ss.value);
+    options(sur,suwar.filter(s=>available.has(Number(s.id))&&(!q||norm(s.name).includes(q)||String(s.id)===q)).map(s=>({id:s.id,label:s.id+' — '+s.name})),old);
+    listen.disabled=!m||sur.disabled;
+  }
+  function updateVersions(){const r=currentRec();updatePortrait(r);options(ver,(r?.moshaf||[]).map(m=>({id:m.id,label:m.name})),ver.value);$('qVersionField').hidden=(r?.moshaf.length||0)<2;updateSurahs();}
+  function updateReciters(){const old=rec.value,q=norm(rs.value);options(rec,reciters.filter(r=>!q||norm(r.name).includes(q)).map(r=>({id:r.id,label:r.name})),old);updateVersions();}
+  rs.oninput=()=>{clearAudio();updateReciters();};ss.oninput=()=>{clearAudio();updateSurahs();};
+  rec.onchange=ver.onchange=()=>{clearAudio();updateVersions();msg.textContent='اختر سورة ثم اضغط تشغيل.';};
+  sur.onchange=()=>{clearAudio();msg.textContent='اضغط تشغيل للاستماع إلى السورة المختارة.';};
+  listen.onclick=async()=>{
+    const m=currentVersion(),r=currentRec(),s=suwar.find(s=>String(s.id)===sur.value);if(!m||!s)return;
+    clearAudio();audio.src=m.server.replace(/\/$/,'')+'/'+String(s.id).padStart(3,'0')+'.mp3';stop.disabled=false;
+    msg.textContent='جارٍ التحميل: '+s.name+' · '+r.name;
+    try{await audio.play();}catch(e){if(e.name!=='AbortError')msg.textContent='تعذر التشغيل. تحقق من الإنترنت ثم اضغط تشغيل.';}
+  };
+  stop.onclick=()=>{clearAudio();msg.textContent='تم إيقاف التلاوة.';};
+  audio.onplaying=()=>{stop.disabled=false;msg.textContent='التلاوة: '+sur.selectedOptions[0]?.text+' · '+rec.selectedOptions[0]?.text;};
+  audio.onerror=()=>{msg.textContent='الصوت غير متاح. أعد المحاولة أو اختر قارئاً آخر.';};
+  audio.onended=()=>{msg.textContent='انتهت السورة.';stop.disabled=true;};
+  async function get(endpoint){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);try{const res=await fetch('https://www.mp3quran.net/api/v3/'+endpoint+'?language=ar',{signal:controller.signal});if(!res.ok)throw Error('HTTP '+res.status);return await res.json();}finally{clearTimeout(timer);}}
+  async function init(){retry.hidden=true;msg.textContent='جارٍ تحميل القراء والسور…';try{
+    const [r,s]=await Promise.all([get('reciters'),get('suwar')]);
+    reciters=r.reciters.filter(r=>r.moshaf?.some(m=>m.server&&m.surah_list)).sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+    suwar=s.suwar.sort((a,b)=>Number(a.id)-Number(b.id));if(!reciters.length||!suwar.length)throw Error('Liste vide');
+    rs.disabled=ss.disabled=false;updateReciters();msg.textContent='اختر القارئ والسورة ثم اضغط تشغيل.';
+  }catch(e){msg.textContent='تعذر تحميل القوائم. تحقق من اتصال الإنترنت ثم أعد المحاولة.';retry.hidden=false;}}
+  retry.onclick=init;init();
+})();
+</script>
+<script>
+(()=>{
+ const minutes=document.getElementById('timerMinutes'),start=document.getElementById('timerStart'),pause=document.getElementById('timerPause'),reset=document.getElementById('timerReset'),display=document.getElementById('timerDisplay'),message=document.getElementById('timerMessage');
+ let deadline=0,remaining=0,running=false;
+ function render(){const sec=Math.max(0,Math.ceil(remaining/1000));display.textContent=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0');}
+ function alarm(){try{ensureAudio();audioCtx.resume();for(let i=0;i<3;i++){const o=audioCtx.createOscillator(),g=audioCtx.createGain(),t=audioCtx.currentTime+i*.55;o.frequency.value=880;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.2,t+.02);g.gain.linearRampToValueAtTime(0,t+.4);o.connect(g).connect(audioCtx.destination);o.start(t);o.stop(t+.42);}}catch(e){console.warn(e);}}
+ function tick(){if(!running)return;remaining=Math.max(0,deadline-Date.now());render();if(!remaining){running=false;start.disabled=false;pause.disabled=true;minutes.disabled=false;start.textContent='▶ Démarrer';document.getElementById('qStop').click();message.textContent='⏰ Minuteur terminé. La récitation est arrêtée.';alarm();}}
+ start.onclick=()=>{if(!remaining){if(!minutes.checkValidity()){minutes.reportValidity();return;}remaining=Number(minutes.value)*60000;}try{ensureAudio();audioCtx.resume();}catch{}deadline=Date.now()+remaining;running=true;start.disabled=true;pause.disabled=false;minutes.disabled=true;message.textContent='Minuteur en cours…';render();};
+ pause.onclick=()=>{tick();if(!running)return;running=false;start.disabled=false;pause.disabled=true;start.textContent='▶ Reprendre';message.textContent='Minuteur en pause.';};
+ reset.onclick=()=>{running=false;remaining=0;minutes.disabled=false;start.disabled=false;pause.disabled=true;start.textContent='▶ Démarrer';display.textContent=String(Number(minutes.value)||0).padStart(2,'0')+':00';message.textContent='Minuteur annulé.';};
+ minutes.oninput=()=>{remaining=0;display.textContent=String(Number(minutes.value)||0).padStart(2,'0')+':00';};
+ setInterval(tick,250);document.addEventListener('visibilitychange',tick);
+})();
+</script>
+
+<script>
+(()=>{
+ const mode=document.getElementById('screenMode'),zoom=document.getElementById('screenZoom'),value=document.getElementById('screenZoomValue'),button=document.getElementById('screenFullscreen'),stage=document.querySelector('.stage');
+ try{const m=localStorage.getItem('screen:mode'),z=Number(localStorage.getItem('screen:zoom'));if(['auto','tv','phone'].includes(m))mode.value=m;if(z>=70&&z<=130)zoom.value=z;}catch{}
+ let frame=0;
+ function adapt(){
+  frame=0;const wide=mode.value==='tv'||(mode.value==='auto'&&innerWidth>=900&&innerWidth>innerHeight);
+  document.body.classList.toggle('wideScreen',wide);
+  const scale=Number(zoom.value)/100;
+  document.body.style.setProperty('--ui-size',Math.max(16,Math.min(38,innerHeight/40))*scale+'px');
+  value.textContent=zoom.value+'%';
+  const rect=stage.getBoundingClientRect();
+  const availableHeight=wide?rect.height:Math.max(180,innerHeight-document.querySelector('.screenTools').offsetHeight-document.querySelector('.quran').offsetHeight-document.querySelector('.timer').offsetHeight-24);
+  const fit=Math.max(100,Math.min(rect.width-8,availableHeight-8));
+  // À 130 %, le cadran occupe toute la place libre sans couper les chiffres.
+  document.body.style.setProperty('--clock-size',Math.floor(fit*Math.min(1,scale))+'px');
+ }
+ function schedule(){if(!frame)frame=requestAnimationFrame(adapt);}
+ function change(){try{localStorage.setItem('screen:mode',mode.value);localStorage.setItem('screen:zoom',zoom.value);}catch{}schedule();}
+ mode.addEventListener('change',change);zoom.addEventListener('input',change);
+ button.onclick=async()=>{try{if(document.fullscreenElement){await document.exitFullscreen();}else if(document.documentElement.requestFullscreen){await document.documentElement.requestFullscreen();}else{button.textContent='Plein écran indisponible';}}catch{button.textContent='Plein écran indisponible';}};
+ document.addEventListener('fullscreenchange',()=>{button.textContent=document.fullscreenElement?'⛶ Quitter le plein écran':'⛶ Plein écran';schedule();});
+ window.addEventListener('resize',schedule);
+ if(window.visualViewport)visualViewport.addEventListener('resize',schedule);
+ if(window.ResizeObserver){const observer=new ResizeObserver(schedule);[stage,document.querySelector('.quran'),document.querySelector('.timer'),document.querySelector('.screenTools')].forEach(el=>observer.observe(el));}
+ adapt();
+})();
+</script>
+
+</body>
+</html>
