@@ -1,1 +1,9 @@
 
+name: APK Horloge Maison
+
+on:
+  workflow_dispatch:
+
+jobs:
+  android:
+    uses: absabefi-cell/wokflow-adapt-/.github/workflows/build-apk.yml@main
