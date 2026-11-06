@@ -1,5 +1,5 @@
 
-name: APK Horloge Maison
+name: APK Horloge_Maison
 
 on:
   workflow_dispatch:
